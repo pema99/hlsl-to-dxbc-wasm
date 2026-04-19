@@ -5,45 +5,54 @@ Builds `hlsl2asm.wasm` — a WASI binary that wraps `vkd3d-compiler` to disassem
 ## Invocation
 
 ```
-echo "float4 main() : SV_Target { return 1; }" | wasmtime hlsl2asm.wasm --profile ps_5_0 -b d3d-asm
+echo "float4 main() : SV_Target { return 1; }" | wasmtime hlsl2asm.wasm --profile ps_5_0 -b d3d-asm --entry main
 ```
 
 The WASM reads HLSL source from stdin, outputs text disassembly to stdout.
-Arguments: `--profile <target>` (e.g. ps_5_0, cs_5_0) and `-b d3d-asm` (output format: text disassembly).
+Key arguments:
+- `--profile <target>` — e.g. `ps_5_0`, `cs_5_0`
+- `-b d3d-asm` — output format: human-readable text disassembly (default is binary DXBC)
+- `--entry <name>` — entry point function name (default: `main`)
+- `--formatting=colour` — emit ANSI color codes in output
 
 ## Source
 
 vkd3d repo: https://gitlab.winehq.org/wine/vkd3d  
-Clone to `/tmp/vkd3d`. The compiler entry point is `programs/vkd3d-compiler/main.c`.  
+Clone to `/tmp/vkd3d`. Tested against commit `5fc3d46`.  
+The compiler entry point is `programs/vkd3d-compiler/main.c`.  
 Shader library sources are in `libs/vkd3d-shader/`.
+
+```bash
+git clone https://gitlab.winehq.org/wine/vkd3d.git /tmp/vkd3d
+```
 
 ## Toolchain Prerequisites
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Clang + wasm-ld | **13** | Must be v13. v14+ may work but wasn't tested. Install LLVM 13. |
-| wasi-sysroot | **v20** | v25 is **incompatible** with wasm-ld 13 (`__heap_end` undefined). Download `wasi-sysroot-20.0.tar.gz` from https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-20 |
-| libclang_rt.builtins-wasm32.a | matching Clang 13 | From wasi-sdk-20 or built separately. Place at `/tmp/builtins-20/lib/wasi/libclang_rt.builtins-wasm32.a` |
-| WinFlexBison | **2.5.25** | For generating HLSL/preproc parser files on Windows. MSYS2/Cygwin flex/bison crash with DLL conflict ("cygheap base mismatch"). Download from https://github.com/lexxmark/winflexbison/releases |
-| perl | any | For generating `spirv_grammar.h` and IDL-derived headers |
+| Clang + wasm-ld | **13** | Must be v13. v25 wasi-sysroot is incompatible with wasm-ld 13. Install LLVM 13 to `C:\Program Files\LLVM`. |
+| wasi-sysroot | **v20** | v25 is **incompatible** with wasm-ld 13 (`__heap_end` undefined at link time). Download from https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-20 |
+| libclang_rt.builtins-wasm32.a | wasi-sdk-20 | Download `libclang_rt.builtins-wasm32-wasi.tar.gz` from the same wasi-sdk-20 release page. Extract and place the `.a` file at `/tmp/builtins-20/lib/wasi/libclang_rt.builtins-wasm32.a`. |
+| WinFlexBison | **2.5.25** | Only needed to regenerate parsers. MSYS2/Cygwin flex/bison crash on Windows ("cygheap base mismatch" DLL conflict). Download from https://github.com/lexxmark/winflexbison/releases |
+| perl | any | To regenerate `spirv_grammar.h`. Pre-built copy included. |
 | SPIRV headers | any | Copy `GLSL.std.450.h` and `spirv.h` from VulkanSDK into `/tmp/spirv-include/spirv/unified1/` |
 
 ### Expected paths
 
 ```
 /c/Program Files/LLVM/bin/clang         # Clang 13
-/c/tools/win_flex_bison/win_flex.exe    # WinFlexBison
+/c/tools/win_flex_bison/win_flex.exe    # WinFlexBison (only if regenerating parsers)
 /c/tools/win_flex_bison/win_bison.exe
-/tmp/wasi-sysroot-20/                   # WASI sysroot
+/tmp/wasi-sysroot-20/                   # WASI sysroot v20
 /tmp/builtins-20/lib/wasi/libclang_rt.builtins-wasm32.a
 /tmp/spirv-include/spirv/unified1/      # SPIRV headers
 /tmp/vkd3d/                             # vkd3d clone
-/tmp/vkd3d-build/                       # build output dir
+/tmp/vkd3d-build/                       # build output dir (created by build.sh)
 ```
 
 ## Generated / Hand-Crafted Files
 
-These files do not exist in the vkd3d repo and must be created. Pre-built copies live in `generated-headers/` and `generated-parsers/`.
+These files do not exist in the vkd3d repo and must be created before compiling. Pre-built copies are included in this repo under `generated-headers/` and `generated-parsers/` — you only need to regenerate them if updating vkd3d.
 
 ### `generated-headers/config.h`
 Place at `include/private/config.h`. Contains feature-detection macros for the WASM target:
@@ -65,52 +74,64 @@ Place at `include/private/config.h`. Contains feature-detection macros for the W
 ```
 
 ### `generated-headers/vkd3d_version.h`
-Place at `include/private/vkd3d_version.h`:
+Place at `include/private/vkd3d_version.h`. Write manually:
 ```c
 #define VKD3D_VERSION_STRING "1.0"
 #define VKD3D_VCS_ID ""
 ```
 
 ### `generated-headers/spirv_grammar.h`
-Generated from `spirv.core.grammar.json` using the perl script at `libs/vkd3d-shader/generate_spirv_parser.py` (or the Makefile rule). A pre-built copy is included.
+Generated from `spirv.core.grammar.json` using the perl script `libs/vkd3d-shader/make_spirv`:
+```bash
+perl /tmp/vkd3d/libs/vkd3d-shader/make_spirv \
+  /tmp/vkd3d/include/private/spirv.core.grammar.json \
+  > /tmp/vkd3d/include/private/spirv_grammar.h
+```
 
 ### `generated-headers/vkd3d_d3dcommon.h`
-Derived from `include/vkd3d_d3dcommon.idl`. Extract only `typedef enum` blocks using:
+Derived from `include/vkd3d_d3dcommon.idl`. Extract only `typedef enum` blocks (the IDL syntax elsewhere causes compile errors):
 ```bash
 perl -0777 -ne 'while (/typedef enum[^;]+;/gs) { print $&, "\n\n"; }' \
-  include/vkd3d_d3dcommon.idl > include/vkd3d_d3dcommon.h
+  /tmp/vkd3d/include/vkd3d_d3dcommon.idl > /tmp/vkd3d/include/vkd3d_d3dcommon.h
 ```
 
 ### `generated-headers/vkd3d_d3dx9shader.h`
-Derived from `include/vkd3d_d3dx9shader.idl`. Same extraction as above.
+Same extraction from `include/vkd3d_d3dx9shader.idl`:
+```bash
+perl -0777 -ne 'while (/typedef enum[^;]+;/gs) { print $&, "\n\n"; }' \
+  /tmp/vkd3d/include/vkd3d_d3dx9shader.idl > /tmp/vkd3d/include/vkd3d_d3dx9shader.h
+```
 
 ### `generated-parsers/`
-Parser files generated by bison/flex from `libs/vkd3d-shader/hlsl.y`, `hlsl.l`, `preproc.y`, `preproc.l`. Pre-built copies are included so you don't need WinFlexBison unless regenerating.
+Parser `.c`/`.h` files generated by bison/flex from `libs/vkd3d-shader/hlsl.y`, `hlsl.l`, `preproc.y`, `preproc.l`. Pre-built copies are included. To regenerate (requires WinFlexBison on Windows):
+```bash
+win_bison -d -o /tmp/vkd3d-build/hlsl.tab.c /tmp/vkd3d/libs/vkd3d-shader/hlsl.y
+win_flex  -o /tmp/vkd3d-build/hlsl.yy.c     /tmp/vkd3d/libs/vkd3d-shader/hlsl.l
+win_bison -d -o /tmp/vkd3d-build/preproc.tab.c /tmp/vkd3d/libs/vkd3d-shader/preproc.y
+win_flex  -o /tmp/vkd3d-build/preproc.yy.c     /tmp/vkd3d/libs/vkd3d-shader/preproc.l
+```
 
 ## Build
 
+`build.sh` always regenerates parser files using WinFlexBison. If you want to use the pre-built parsers from `generated-parsers/` instead (skipping the WinFlexBison requirement), comment out the "Generating parser files" section of `build.sh` and manually copy the pre-built files to `/tmp/vkd3d-build/` first:
+
+```bash
+cp generated-parsers/* /tmp/vkd3d-build/
+```
+
+Then run:
 ```bash
 bash build.sh
 ```
 
 This:
-1. Generates parser files (skip if using pre-built ones from `generated-parsers/`)
-2. Installs generated headers into the vkd3d source tree
-3. Compiles all sources with `-Oz -ffunction-sections -fdata-sections`
-4. Links with `--strip-all --gc-sections`
-5. Copies output to `hlsl2asm.wasm`
+1. Installs generated headers into the vkd3d source tree
+2. Compiles all sources with `-Oz -ffunction-sections -fdata-sections`
+3. Links with `--strip-all --gc-sections`
+4. Copies output to `hlsl2asm.wasm`
 
 ## What NOT to compile
 
-- `libs/vkd3d-common/blob.c` — requires COM interfaces and `vkd3d.h` (the full D3D layer, not just shader compiler)
-- Anything under `libs/vkd3d/` — same, full D3D layer
+- `libs/vkd3d-common/blob.c` — requires COM interfaces and `vkd3d.h` (the full D3D layer, not just the shader compiler)
+- Anything under `libs/vkd3d/` — same reason
 - `programs/vkd3d-dxbc/` — different tool, not needed
-
-## JavaScript WASI shim (HLSLInterpreter.Debugger)
-
-The WASM is consumed via a minimal WASI shim in `wwwroot/js/app.js` as `window.compileHlslToAsm(hlslCode, profile)`.
-The args passed to the WASM must include `-b d3d-asm` to get text output:
-```js
-const args = ['hlsl2asm', '--profile', profile, '-b', 'd3d-asm'];
-```
-Without `-b d3d-asm`, the default output target is binary DXBC (`dxbc-tpf`), not text.
