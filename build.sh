@@ -11,6 +11,7 @@ BUILD=/tmp/vkd3d-build
 SYSROOT=/tmp/wasi-sysroot-20
 BUILTINS=/tmp/builtins-20
 CLANG="/c/Program Files/LLVM/bin/clang"
+CLANG_INCLUDE="/c/Program Files/LLVM/lib/clang/13.0.0/include"
 WIN_FLEX="/c/tools/win_flex_bison/win_flex.exe"
 WIN_BISON="/c/tools/win_flex_bison/win_bison.exe"
 SPIRV_INCLUDE=/tmp/spirv-include
@@ -39,8 +40,10 @@ cp "$BUILD/hlsl.tab.c" "$BUILD/hlsl.tab.h" "$BUILD/hlsl.yy.c" \
    "$VKD3D/libs/vkd3d-shader/" 2>/dev/null || true
 
 INCLUDES=(
+  -I"$CLANG_INCLUDE"
   -I"$VKD3D/include/private"
   -I"$VKD3D/include"
+  -I"$VKD3D/libs/vkd3d-shader"
   -I"$SPIRV_INCLUDE"
   -I"$BUILD"
 )
@@ -51,6 +54,7 @@ CFLAGS=(
   -resource-dir "$BUILTINS"
   -Oz -ffunction-sections -fdata-sections
   -D_POSIX_C_SOURCE=200809L
+  -D_GNU_SOURCE
   "${INCLUDES[@]}"
 )
 

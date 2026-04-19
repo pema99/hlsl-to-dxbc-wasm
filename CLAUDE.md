@@ -40,15 +40,18 @@ git clone https://gitlab.winehq.org/wine/vkd3d.git /tmp/vkd3d
 ### Expected paths
 
 ```
-/c/Program Files/LLVM/bin/clang         # Clang 13
-/c/tools/win_flex_bison/win_flex.exe    # WinFlexBison (only if regenerating parsers)
+/c/Program Files/LLVM/bin/clang                    # Clang 13
+/c/Program Files/LLVM/lib/clang/13.0.0/include/   # Clang builtin headers (stddef.h etc.)
+/c/tools/win_flex_bison/win_flex.exe               # WinFlexBison (only if regenerating parsers)
 /c/tools/win_flex_bison/win_bison.exe
-/tmp/wasi-sysroot-20/                   # WASI sysroot v20
+/tmp/wasi-sysroot-20/                              # WASI sysroot v20
 /tmp/builtins-20/lib/wasi/libclang_rt.builtins-wasm32.a
-/tmp/spirv-include/spirv/unified1/      # SPIRV headers
-/tmp/vkd3d/                             # vkd3d clone
-/tmp/vkd3d-build/                       # build output dir (created by build.sh)
+/tmp/spirv-include/spirv/unified1/                 # SPIRV headers
+/tmp/vkd3d/                                        # vkd3d clone
+/tmp/vkd3d-build/                                  # build output dir (created by build.sh)
 ```
+
+The Clang builtin include path is required — without it the WASI sysroot headers fail to find `stddef.h`. `-D_GNU_SOURCE` is also required for `M_PI` in `hlsl_codegen.c`.
 
 ## Generated / Hand-Crafted Files
 
