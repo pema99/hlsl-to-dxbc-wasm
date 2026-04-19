@@ -1,6 +1,8 @@
 # hlsl-to-dxbc-wasm
 
-A WebAssembly build of [vkd3d-compiler](https://gitlab.winehq.org/wine/vkd3d), the HLSL shader compiler frontend from the vkd3d project. The resulting binary reads HLSL source from stdin and outputs human-readable DXBC disassembly to stdout.
+A setup for building a WebAssembly blob of [vkd3d-compiler](https://gitlab.winehq.org/wine/vkd3d), the HLSL shader compiler frontend from the vkd3d project. The resulting binary reads HLSL source from stdin and outputs human-readable DXBC disassembly to stdout.
+
+I used Claude Code to generate this.
 
 ## Usage
 
