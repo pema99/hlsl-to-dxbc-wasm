@@ -1,0 +1,2 @@
+#define VKD3D_VERSION_STRING "1.0"
+#define VKD3D_VCS_ID ""
